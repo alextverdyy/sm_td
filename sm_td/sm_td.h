@@ -23,6 +23,10 @@
  */
 #pragma once
 
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
 #ifndef SMTD_UNIT_TEST
 #include QMK_KEYBOARD_H
 #include "deferred_exec.h"
@@ -34,12 +38,9 @@
 
 #ifdef SMTD_DEBUG_ENABLED
 #include "print.h"
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
 #endif
 
-#ifdef SMTD_UNIT_TEST
+#if defined(SMTD_UNIT_TEST) && defined(SMTD_TEST_DEBUG) && !defined(SMTD_DEBUG_ENABLED)
 #define SMTD_DEBUG_ENABLED
 #endif
 
@@ -130,9 +131,6 @@
 #ifndef SMTD_CHORDAL_HOLD
 #define SMTD_CHORDAL_HOLD 0
 #endif
-
-#include <stdint.h>
-
 
 /* ************************************* *
  *         BASE DEFINITIONS              *
@@ -277,9 +275,9 @@ extern const uint16_t keymaps[][MATRIX_ROWS][MATRIX_COLS];
 
 bool smtd_process_desired(uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
 
-void smtd_apply_to_stack(uint8_t starting_idx, uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
+bool smtd_apply_to_stack(uint8_t starting_idx, uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
 
-void smtd_create_state(uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
+bool smtd_create_state(uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
 
 void smtd_apply_event(bool is_state_key, smtd_state *state, uint16_t pressed_keycode, keyrecord_t *record);
 
@@ -318,7 +316,7 @@ bool smtd_feature_enabled_or_default(smtd_state *state, smtd_feature feature);
 
 #else
 
-uint32_t last_key_timer = 0;
+static uint32_t last_key_timer = 0;
 
 #ifndef SMTD_PRINT
 #define SMTD_PRINT(...) printf(__VA_ARGS__);
@@ -447,10 +445,9 @@ bool process_smtd(uint16_t pressed_keycode, keyrecord_t *record);
 
 bool smtd_process_desired(uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
 
-void
-smtd_apply_to_stack(uint8_t starting_idx, uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
+bool smtd_apply_to_stack(uint8_t starting_idx, uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
 
-void smtd_create_state(uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
+bool smtd_create_state(uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
 
 bool is_following_key(smtd_state *state, uint16_t pressed_keycode, keyrecord_t *record);
 

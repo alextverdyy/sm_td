@@ -1,18 +1,26 @@
-```
-This documentation is up to date for version 0.6.0.
-```
+# SM_TD overview
 
-This is the `SM Tap Dance` (`sm_td` or `smtd` for short) user library for QMK.
-The main goal of this library is to ultimately fix the Home Row Mods (HRM) and Tap Dance problems in QMK.
-The basic features of this library are:
-- Human-friendly tap+tap vs. hold+tap interpretation. Especially useful for `LT()` and `MT()` macros.
-- Better multi-tap and hold (and then tap again) interpretation of the same key
-- Reactive response to multiple taps (and holds)
+> Documentation version: 0.6.5-SNAPSHOT
 
-This library is created because standard Tap Dance library in QMK and MT/ LT functions are not responsive enough.
-This standard libraries you sometimes have to wait to make sure that QMK handles your press as hold, sometimes there are unexpected interpretations, sometimes you are forced to pay too much attention on how to release keys. That irritated me much, so I've built custom users library to overcome that problems.
+SM_TD is a QMK community module for reliable home-row modifiers, layer taps, and multi-tap actions. It decides whether an input is a tap or a hold by looking at both press and release timing.
 
-Core idea of that library is making decision about holding or tapping based on difference between key release. As human we don't pay much attention on a way we release a key. We are used to press keys in certain sequence but not releasing in a sequence, so we tend to hold a key for longer time then it's necessary to. For a human Seq. A and Seq. B from example below are almost the same and should be processed the same way, but standard library will interpret Seq. A as hold+tap, and Seq. B and C. as tap+tap. In contrast sm_td will interpret A. and B. as hold+tap, and C. as tap+tap.
+## Why it exists
+
+Fast typing commonly overlaps adjacent keys. Stock tap-hold behavior can interpret the first key as a hold as soon as a following key is pressed, even when the user intended two letters. SM_TD delays that decision long enough to use the release rhythm as additional evidence.
+
+Key capabilities include:
+
+- Human-friendly tap-tap versus hold-tap decisions for `MT()` and `LT()` behavior
+- Multi-tap sequences and tap-then-hold actions
+- Per-key and global timing configuration
+- Optional dynamic release windows based on the user's typing rhythm
+- Integration with Caps Word, layers, Leader, VIA/Vial, and the QMK processing pipeline
+- Optional chordal hold rules for same-hand and opposite-hand rolls
+
+## Timing model
+
+The engine tracks a macro key and the key that follows it. Sequences A and B below have similar overlap and resolve as hold-tap. Sequence C keeps the following key pressed much longer and resolves as tap-tap. Dynamic release configuration can further adapt the decision window to the press rhythm.
+
 
 ```
          |     Sequence A.     |     Sequence B.     |      Sequence C.    |

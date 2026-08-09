@@ -1,10 +1,14 @@
+import atexit
 import ctypes
-import sys
 import hashlib
 import os
+from pathlib import Path
+import shlex
+import shutil
 import subprocess
-import atexit
-from typing import Dict, List, Optional, Tuple, Any
+import sys
+import tempfile
+from typing import Any, Dict, List, Optional, Tuple
 
 
 # Structure definitions
@@ -73,22 +77,26 @@ class Keycode:
         self.defer_idx = None
 
     def press(self):
-        assert self.pressed == False
-        assert self.smtd.get_layer_state() == self.layer
+        if self.pressed:
+            raise RuntimeError("keycode is already pressed")
+        if self.smtd.get_layer_state() != self.layer:
+            raise RuntimeError("keycode is not active on the current layer")
         self.pressed = True
         result, defer_idx = self.smtd.process_key_and_timeout(self, True)
         self.defer_idx = defer_idx
         return result
 
     def release(self):
-        assert self.pressed == True
+        if not self.pressed:
+            raise RuntimeError("keycode is not pressed")
         self.pressed = False
         result, defer_idx = self.smtd.process_key_and_timeout(self, False)
         self.defer_idx = defer_idx
         return result
 
     def prolong(self):
-        assert self.defer_idx is not None
+        if self.defer_idx is None:
+            raise RuntimeError("keycode has no deferred execution")
         self.smtd.execute_deferred(self.defer_idx)
         self.defer_idx = None
 
@@ -122,7 +130,8 @@ class Key:
         self.released = None
 
     def press(self):
-        assert self.pressed is None
+        if self.pressed is not None:
+            raise RuntimeError("key is already pressed")
         self.released = None
         self.pressed = self.current_keycode()
         return self.pressed.press()
@@ -135,8 +144,10 @@ class Key:
         raise ValueError(f"No keycode for {self} on layer {layer}")
 
     def release(self):
-        assert self.pressed is not None
-        assert self.released is None
+        if self.pressed is None:
+            raise RuntimeError("key is not pressed")
+        if self.released is not None:
+            raise RuntimeError("key was already released")
         result = self.pressed.release()
         self.released = self.pressed
         self.pressed = None
@@ -179,8 +190,12 @@ class SmtdBindings:
         self.lib.TEST_set_smtd_bypass(ctypes.c_bool(enabled))
 
     def reset(self) -> None:
-        """Reset the test state"""
+        """Reset the test state."""
         self.lib.TEST_reset()
+
+    def fail_next_deferred_exec(self) -> None:
+        """Make the next mocked defer_exec call return INVALID_DEFERRED_TOKEN."""
+        self.lib.TEST_fail_next_deferred_exec()
 
     def get_record_history(self) -> List[Dict[str, Any]]:
         """Get the history of key records processed"""
@@ -219,12 +234,13 @@ class SmtdBindings:
 
     def execute_deferred(self, idx: int, make_asserts: bool = True) -> None:
         """Execute a specific deferred execution by its id"""
-        if make_asserts:
-            assert self.get_deferred_execs()[idx - 1]["active"] == True
+        if make_asserts and not self.get_deferred_execs()[idx - 1]["active"]:
+            raise RuntimeError(f"deferred execution {idx} is inactive")
         if not self.get_deferred_execs()[idx - 1]["active"]:
             return
         self.lib.TEST_execute_deferred(ctypes.c_uint8(idx))
-        assert self.get_deferred_execs()[idx - 1]["active"] == False
+        if self.get_deferred_execs()[idx - 1]["active"]:
+            raise RuntimeError(f"deferred execution {idx} did not complete")
 
     def wait(self, ms: int) -> None:
         """Advance the virtual clock, firing deferred executions that come due"""
@@ -254,38 +270,73 @@ class SmtdBindings:
 # Compile and load the shared library
 def load_smtd_lib(path: str) -> SmtdBindings:
     """Compile and load the sm_td shared library"""
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-    
-    # Create unique library name based on the layout path to avoid conflicts
-    path_hash = hashlib.md5(path.encode()).hexdigest()[:8]
+    project_root = Path(__file__).resolve().parents[2]
+    source_path = (project_root / path).resolve()
+    if project_root not in source_path.parents or not source_path.is_file():
+        raise ValueError(f"Layout source must be a file inside {project_root}: {path}")
+
+    # Create a unique library name based on the source path to avoid conflicts.
+    path_hash = hashlib.sha256(str(source_path).encode()).hexdigest()[:12]
     ext = '.dylib' if sys.platform == 'darwin' else '.so'
-    lib_path = os.path.join(project_root, f"libsm_td_{path_hash}{ext}")
+    build_dir = Path(tempfile.mkdtemp(prefix="sm_td-tests-"))
+    lib_path = build_dir / f"libsm_td_{path_hash}{ext}"
 
-    compile_cmd = (f"clang -shared "
-                   f"-o {lib_path} "
-                   f"-fPIC {os.path.join(project_root, path)} "
-                   f"-I{project_root} "
-                   f"-DSMTD_UNIT_TEST "
-                   f"-std=c11 -Wall -Wextra -Wno-sign-compare -Wno-missing-braces -Wno-unused-parameter "
-                   f"-Wunused-variable -Werror=unused-variable")
+    compiler = os.environ.get("CC")
+    if compiler:
+        compiler_args = shlex.split(compiler)
+        compiler_path = shutil.which(compiler_args[0])
+    else:
+        compiler_args = []
+        compiler_path = next(
+            (candidate for name in ("clang", "cc", "gcc")
+             if (candidate := shutil.which(name))),
+            None,
+        )
+    if compiler_path is None:
+        raise RuntimeError("No C compiler found. Install clang or set the CC environment variable.")
+    if compiler_args:
+        compiler_args[0] = compiler_path
+    else:
+        compiler_args = [compiler_path]
 
-    print(f"Compiling sm_td library: {compile_cmd}")
-    result = subprocess.run(compile_cmd, shell=True, stderr=subprocess.PIPE)
+    debug_enabled = os.environ.get("SMTD_DEBUG", "0").lower() not in {"", "0", "false", "no"}
+    debug_flags = ["-DSMTD_TEST_DEBUG"] if debug_enabled else []
+
+    compile_cmd = [
+        *compiler_args,
+        "-shared",
+        "-o", str(lib_path),
+        "-fPIC", str(source_path),
+        f"-I{project_root}",
+        "-DSMTD_UNIT_TEST",
+        *debug_flags,
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Wno-sign-compare",
+        "-Wno-missing-braces",
+        "-Wno-unused-parameter",
+        "-Wunused-variable",
+        "-Werror=unused-variable",
+    ]
+
+    print(f"Compiling sm_td library: {shlex.join(compile_cmd)}")
+    result = subprocess.run(compile_cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
-        print(f"Compilation failed: {result.stderr.decode()}")
-        raise RuntimeError("Failed to compile sm_td library")
+        raise RuntimeError(
+            f"Failed to compile {source_path}:\n{result.stderr.strip()}"
+        )
 
     # Load the compiled library
-    lib: ctypes.CDLL = ctypes.CDLL(lib_path)
+    lib: ctypes.CDLL = ctypes.CDLL(str(lib_path))
 
     # Register cleanup to remove the library file
     def cleanup() -> None:
         try:
-            if os.path.exists(lib_path):
-                os.remove(lib_path)
-        except Exception as e:
-            print(f"Failed to clean up shared library: {e}")
+            shutil.rmtree(build_dir, ignore_errors=True)
+        except Exception as error:
+            print(f"Failed to clean up test build directory: {error}")
 
     atexit.register(cleanup)
 
@@ -297,6 +348,9 @@ def load_smtd_lib(path: str) -> SmtdBindings:
 
     lib.TEST_reset.argtypes = []
     lib.TEST_reset.restype = None
+
+    lib.TEST_fail_next_deferred_exec.argtypes = []
+    lib.TEST_fail_next_deferred_exec.restype = None
 
     lib.TEST_get_record_history.argtypes = [
         ctypes.POINTER(CHistory),  # out_records

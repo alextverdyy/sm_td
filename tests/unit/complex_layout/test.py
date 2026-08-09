@@ -97,9 +97,7 @@ class TestSmTd(SmTdAssertions):
         self.assertFalse(MMT.release(), "release should return true")
         self.assertEqual(smtd.get_mods(), 0)
 
-        print("\nevents:")
         records = smtd.get_record_history()
-        for r in records: print(f"{r}")
 
         self.assertEqual(len(records), 2)
         self.assertRegister(records[0], MACRO2)
@@ -167,14 +165,8 @@ class TestSmTd(SmTdAssertions):
         for p in presses: p.press()
         for r in releases: r.release()
 
-        print("\n\npresses:")
-        for p in presses: print(f" -- {p}")
-        print("\nreleases:")
-        for r in releases: print(f" -- {r}")
 
-        print("\nevents:")
         records = smtd.get_record_history()
-        for r in records: print(f"{r}")
 
         self.assertEmulatePress(records[0], K1, layer_state=1, mods=4)
         self.assertEmulateRelease(records[1], K1, layer_state=1, mods=4)
@@ -186,19 +178,12 @@ class TestSmTd(SmTdAssertions):
         for p in presses: p.press()
         for r in releases: r.release()
 
-        print("\n\npresses:")
-        for p in presses: print(f" -- {p}")
-        print("\nreleases:")
-        for r in releases: print(f" -- {r}")
 
-        print("\nevents:")
         records = smtd.get_record_history()
-        for r in records: print(f"{r}")
 
         self.assertEqual(len(records), 2)
         self.assertEmulatePress(records[0], K1, layer_state=1, mods=4)
         self.assertEmulateRelease(records[1], K1, layer_state=1, mods=4)
-        print("\n\n----------------------------------------------------\n\n")
 
     def test_MT_TAP_MT_KEY(self):
         MMT.press()
@@ -208,9 +193,7 @@ class TestSmTd(SmTdAssertions):
         MMT.release()
         K1.release()
 
-        print('\n\n')
         records = smtd.get_record_history()
-        for r in records: print(f"{r}")
         self.assertEqual(len(records), 4)
         self.assertRegister(records[0], MACRO2)
         self.assertUnregister(records[1], MACRO2)
@@ -235,18 +218,11 @@ class TestSmTd(SmTdAssertions):
             for key in press_seq: key.press()
             for key in release_seq: key.release()
 
-            print("\n\npresses:")
-            for p in press_seq: print(f" -- {p}")
-            print("\nreleases:")
-            for r in release_seq: print(f" -- {r}")
 
-            print("\nevents:")
             records = smtd.get_record_history()
-            for r in records: print(f"{r}")
 
             self.assertEmulatePress(records[0], K1, layer_state=1, mods=4)
             self.assertEmulateRelease(records[1], K1, layer_state=1, mods=4)
-            print("\n\n----------------------------------------------------\n\n")
 
     def test_LT_layer_switch(self):
         LT1.press()
@@ -277,10 +253,6 @@ class TestSmTd(SmTdAssertions):
         MTE.release()
         LT1.release()
 
-        print("\n\n\n------------------------------------------")
-        print("\n\nevents:")
-        for r in smtd.get_record_history(): print(f"{r}")
-        print("\n\n------------------------------------------\n\n\n")
 
         self.assertHistory(
             EmulatePress(K1, layer=1, mods=4),
@@ -301,10 +273,6 @@ class TestSmTd(SmTdAssertions):
         LT1.release()
         MTE.release()
 
-        print("\n\n\n------------------------------------------")
-        print("\n\nevents:")
-        for r in smtd.get_record_history(): print(f"{r}")
-        print("\n\n------------------------------------------\n\n\n")
 
         self.assertHistory(
             EmulatePress(K1, layer=1, mods=4),

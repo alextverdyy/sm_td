@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 
-import unittest
 import sys
-import os
+import unittest
+from pathlib import Path
 
-# Add the parent directory to the Python path
-project_root = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
-sys.path.insert(0, project_root)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+
+def main() -> int:
+    """Discover the unit tests and return a shell-friendly exit status."""
+    start_dir = Path(__file__).resolve().parent / "unit"
+    suite = unittest.defaultTestLoader.discover(str(start_dir), pattern="test*.py")
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    return 0 if result.wasSuccessful() else 1
+
 
 if __name__ == "__main__":
-    # Discover and run all tests in the tests directory
-    loader = unittest.TestLoader()
-    start_dir = os.path.join(os.path.dirname(__file__), 'unit')
-    suite = loader.discover(start_dir, pattern='test*.py')
-    
-    runner = unittest.TextTestRunner(verbosity=2)
-    runner.run(suite)
+    raise SystemExit(main())

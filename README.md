@@ -134,7 +134,7 @@ That’s it — proceed to Configuration.
 
 ## Documentation
 
-There is a [/docs](https://github.com/stasmarkin/sm_td/blob/main/docs/) folder with extensive documentation.
+Start with the [documentation index](docs/README.md) for installation, customization, timing, debugging, upgrades, and test authoring.
 
 Also, you may check [my layout](https://github.com/stasmarkin/sm_voyager_keymap) for a real-world example of using this library.
 
