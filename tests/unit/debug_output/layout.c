@@ -27,6 +27,10 @@ char *smtd_keycode_to_str_user(uint16_t keycode) {
     return buffer;
 }
 
+const char *TEST_format_keycode_uncertain(uint16_t keycode) {
+    return smtd_keycode_to_str_uncertain(keycode, true);
+}
+
 const char *TEST_format_state(uint16_t pressed_keycode, uint16_t desired_keycode) {
     smtd_state state = EMPTY_STATE;
     state.pressed_keycode = pressed_keycode;

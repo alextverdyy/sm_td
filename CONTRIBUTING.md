@@ -37,7 +37,8 @@ maintainer's setup is documented.
 
 ```
 sm_td/                     Core C module (the shipped artifact)
-  sm_td.c / sm_td.h        Engine + public API and macros
+  sm_td.h                   Stable public configuration, hooks, and macro API
+  sm_td.c                   Private state machine and QMK integration
   introspection.h          Version block (kept in lockstep with sm_td.c/.h)
   qmk_module.json          QMK community-module metadata
 tests/
@@ -58,6 +59,11 @@ README.md                  Project intro, install options, version roadmap
 
 A change almost always touches `sm_td/` **and** at least one suite under
 `tests/`. Doc-only and test-only changes are valid too.
+
+`sm_td.h` is the supported facade. Keep engine state, timeout callbacks, debug
+formatting, and transition helpers private to `sm_td.c`. The engine intentionally
+stays in one translation unit so community-module builds and manual two-file
+installs require no extra source lists.
 
 ---
 

@@ -1,3 +1,8 @@
+## `v0.6.4` to `v0.6.5`
+- replace both `sm_td.h` and `sm_td.c` with the newer versions, or update the community module
+- no supported configuration or behavior changed
+- implementation-only state types and helper functions are no longer declared in `sm_td.h`; keymaps should use the documented hooks and macros instead
+
 ## `v0.6.3` → `v0.6.4`
 - replace both `sm_td.h` and `sm_td.c` with newer versions (or just update the community module)
 - behavior change: the dynamic release window default is now `SMTD_GLOBAL_RELEASE_PERCENT 30` (a slightly wider window — fewer hold→tap-tap misfires, especially on the pinky). To restore the previous behavior, add `#define SMTD_GLOBAL_RELEASE_PERCENT 20` to your `config.h`
