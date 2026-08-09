@@ -134,7 +134,7 @@ That’s it — proceed to Configuration.
 
 ## Documentation
 
-There is a [/docs](https://github.com/stasmarkin/sm_td/blob/main/docs/) folder with extensive documentation.
+Start with the [documentation index](docs/README.md) for installation, customization, timing, debugging, upgrades, and test authoring.
 
 Also, you may check [my layout](https://github.com/stasmarkin/sm_voyager_keymap) for a real-world example of using this library.
 
@@ -162,42 +162,32 @@ If you find this library helpful, consider supporting the project:
 Your support helps me continue developing and maintaining this project. Thank you for using SM_TD!
 
 
-## Roadmap
+## Release history and roadmap
 
-#### `v0.5.x`
-- Full-pipeline taps + Caps Word (#23) and `SMTD_ENABLE_QMK_TAPHOLD` for native `MT()` / `LT()` (0.5.6), QMK community module integration (0.5.1 / 0.5.5), split into `.h` + `.c` (0.5.4), 3+ finger roll interpretation and a collection of macros (0.5.0 / 0.5.3), AVR fix (#48, 0.5.2), and assorted bug fixes
+### Released
 
-#### `v0.6.0`
-- Feature: dynamic release timeout derived from your typing rhythm (fixes #45); a new global flag tunes the window (set to 0 for the old fixed-timeout behavior)
+- **v0.5.x:** QMK community-module support, full-pipeline taps, Caps Word, native `MT()` and `LT()`, three-finger rolls, macro helpers, and AVR fixes.
+- **v0.6.0:** Dynamic release timing based on typing rhythm.
+- **v0.6.1:** State-removal and macro-expansion fixes, plus `smtd_reset()` for test harnesses.
+- **v0.6.2:** Additive layer handling and stacked-key release fixes.
+- **v0.6.3:** Chordal hold and Leader support for derived tap keycodes.
+- **v0.6.4:** Correct neutral-key behavior in chordal hold.
+- **v0.6.5 snapshot:** Fine-grained `SMTD_GLOBAL_RELEASE_PERCENT` timing and a smaller supported public API surface.
 
-#### `v0.6.1`
-- Fix: guard against state double-removal crash in `smtd_apply_stage`
-- Fix: `SMTD_TK` / `SMTD_TTO` macro expansion
-- New: `smtd_reset()` for test harnesses
+### Planned, no version promised
 
-#### `v0.6.2`
-- Fix: `SMTD_LT` uses native `layer_on` / `layer_off`, so it no longer wipes foreign layer bits on release (fixes #57, unblocks tri-layer #44)
-- Fix: a held key released under a stacked key now finalizes instead of hanging its modifier (fixes #58)
+Work is tracked in the upstream issue tracker. Priority should follow confirmed user impact and a reproducible test:
 
-#### `v0.6.3`
-- Feature: chordal hold ("opposite-hands rule") via `SMTD_CHORDAL_HOLD` — same-hand rolls stay taps, cross-hand chords hold; handedness from a `chordal_hold_layout` array or an overridable `smtd_chordal_handedness()` (#60)
-- Fix: custom / derived keycode taps now feed the QMK leader buffer, so Leader sequences see them (fixes #29)
+1. Better Combo behavior ([#41](https://github.com/stasmarkin/sm_td/issues/41)).
+2. Missing layer behaviors: tri-layer ([#44](https://github.com/stasmarkin/sm_td/issues/44)), Layer Lock ([#47](https://github.com/stasmarkin/sm_td/issues/47)), and OSL ([#56](https://github.com/stasmarkin/sm_td/issues/56)).
+3. Easier configuration and generated keymaps ([#49](https://github.com/stasmarkin/sm_td/issues/49), [#42](https://github.com/stasmarkin/sm_td/issues/42)).
+4. VIA/Vial compatibility beyond the current integration coverage ([#40](https://github.com/stasmarkin/sm_td/issues/40)).
+5. Real-world examples and a searchable documentation site ([#46](https://github.com/stasmarkin/sm_td/issues/46), [#51](https://github.com/stasmarkin/sm_td/issues/51)).
 
-#### `v0.6.5` (we are here)
-- Feature: `SMTD_GLOBAL_RELEASE_PERCENT` controls the dynamic release window (`min(p1, p2) * percent / 100`) with fine, single-percent granularity. Behavior change: the default is now `SMTD_GLOBAL_RELEASE_PERCENT 30` (a slightly wider window — fewer hold→tap-tap misfires); set `SMTD_GLOBAL_RELEASE_PERCENT 20` to restore the previous behavior
+### v1.0 readiness
 
-#### `v0.6.4`
-- Fix: chordal hold holds (not taps) when a neutral (`'*'`) key follows a mod-tap, matching the hold-timeout path (#62)
-
-#### `v0.7.0+` and further `v0.x`
-- better combo support
-- other feature requests (see [issues](https://github.com/stasmarkin/sm_td/issues))
-
-#### `v1.0.0`
-- stable API
-- memory optimizations (on storing active states)
-- memory optimizations (on state machine stack size)
-
+- Keep the documented API stable.
+- Optimize memory only when firmware-size or runtime measurements show a real constraint.
 
 ## Special Thanks
 

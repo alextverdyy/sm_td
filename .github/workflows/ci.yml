@@ -2,19 +2,38 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
-    name: Tests (${{ matrix.os }}, Python ${{ matrix.python-version }})
+  unit-tests:
+    name: Unit tests (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        python-version: ["3.10", "3.13"]
+        include:
+          - name: Linux, Python 3.10, GCC
+            os: ubuntu-latest
+            python: "3.10"
+            cc: gcc
+          - name: Linux, Python 3.13, Clang
+            os: ubuntu-latest
+            python: "3.13"
+            cc: clang
+          - name: macOS, Python 3.13, Apple Clang
+            os: macos-latest
+            python: "3.13"
+            cc: clang
 
     steps:
       - name: Checkout
@@ -23,21 +42,20 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ matrix.python }}
 
-      - name: Install clang (Ubuntu)
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang
-
-      - name: Verify clang
-        run: clang --version
-
-      - name: Run tests
+      - name: Verify toolchain
         env:
-          SMTD_DEBUG: "0"
+          CC: ${{ matrix.cc }}
         run: |
           python3 --version
-          python3 tests/run_tests.py
+          "$CC" --version
 
+      - name: Check Python sources
+        run: python3 -m compileall -q tests
+
+      - name: Run unit tests
+        env:
+          CC: ${{ matrix.cc }}
+          SMTD_DEBUG: "0"
+        run: python3 tests/run_tests.py

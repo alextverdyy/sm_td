@@ -1,12 +1,13 @@
 # QMK-native tests for sm_td
 
-These suites compile `sm_td.c` against a **real, unmodified `qmk/qmk_firmware`**
-checkout and run it through QMK's own googletest harness (`tests/test_common`:
+These suites compile `sm_td.c` against a real `qmk/qmk_firmware` checkout and
+run it through QMK's own googletest harness (`tests/test_common`:
 `TestFixture`, `TestDriver`, `KeymapKey`, `EXPECT_REPORT`). Unlike the Python
 `ctypes` suites — which drive `process_smtd` against hand-written mocks
 (`tests/sm_td_bindings.c`) — these exercise the genuine quantum pipeline:
-`action.c`, `action_tapping.c`, `deferred_exec.c`, layer state, etc., compiled
-into one native host executable. No QMK fork or patch is required.
+`action.c`, `action_tapping.c`, `deferred_exec.c`, layer state, and related
+components in one native host executable. The VIA suite applies two guarded
+patches to its disposable checkout, as documented below. No QMK fork is needed.
 
 ## Run
 
@@ -32,7 +33,7 @@ each ref gets its own `checkouts/<ref>/`.
 ## Layout
 
 ```
-overlay/<suite>/
+suites/<suite>/
   test.mk              # DEFERRED_EXEC_ENABLE, -DQMK_KEYBOARD_H="quantum.h", SRC += sm_td.c smtd_hooks.c
   config.h             # #include "test_common.h" + SMTD_* config (per-suite knobs)
   smtd_hooks.c         # process_record_user -> process_smtd; on_smtd_action; weak-hook defaults
@@ -106,9 +107,14 @@ after a re-fetch.
   dynamic mod-tap holds its mod on a following key (also dynamic), and remapping a
   mod-tap cell to a plain key drops the hold.
 
+- `smtd_chordal_hold`: verifies same-hand rolls, opposite-hand holds, layer taps,
+  neutral thumb positions, and timeout behavior against QMK.
+- `smtd_leader`: verifies that native and derived tap keycodes are consumed by
+  QMK Leader through the appropriate pipeline or fallback path.
+
 ## Status / findings
 
-- Integration works: nine suites, 56 active tests green against qmk_firmware 0.33.5.
+- The repository contains 11 suites. Run `just test qmk` to execute all of them against the pinned QMK version.
 - The faceroll "crashes" once captured as `DISABLED_*_segfaults` were a TEST-HARNESS
   artifact, NOT engine bugs: those tests declared no `TestDriver driver;`, so QMK's
   host-driver pointer dangled (its only setter was the throwaway `TestDriver` in

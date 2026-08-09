@@ -65,24 +65,25 @@ class SmTdAssertions(unittest.TestCase):
         """Method to run after each test"""
         super().tearDown()
 
-        assert self.smtd.get_mods() == 0
-        assert self.smtd.get_layer_state() == 0
+        self.assertEqual(self.smtd.get_mods(), 0, "a test leaked active modifiers")
+        self.assertEqual(self.smtd.get_layer_state(), 0, "a test leaked an active layer")
 
-        for d in self.smtd.get_deferred_execs():
-            if d["active"]: self.smtd.execute_deferred(d["idx"])
-        for d in self.smtd.get_deferred_execs():
-            assert not d["active"]
+        for deferred in self.smtd.get_deferred_execs():
+            if deferred["active"]:
+                self.smtd.execute_deferred(deferred["idx"])
+        for deferred in self.smtd.get_deferred_execs():
+            self.assertFalse(deferred["active"], "a deferred execution remained active")
 
-        assert self.smtd.get_mods() == 0
-        assert self.smtd.get_layer_state() == 0
+        self.assertEqual(self.smtd.get_mods(), 0, "cleanup leaked active modifiers")
+        self.assertEqual(self.smtd.get_layer_state(), 0, "cleanup leaked an active layer")
 
     def assertHistory(self, *args):
         history = self.smtd.get_record_history()
-        print("\n\nHistory:")
-        for h in history: print(f" -- {h}")
-        print("\n")
-
-        assert len(history) == len(args)
+        self.assertEqual(
+            len(history),
+            len(args),
+            f"unexpected history length; actual events: {history}",
+        )
 
         for i, a in enumerate(args):
             if isinstance(a, EmulatePress):

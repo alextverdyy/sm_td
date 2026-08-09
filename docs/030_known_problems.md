@@ -1,64 +1,56 @@
-## Partial Combo support
+# Known problems and current limitations
 
-`COMBO_ACTION` + `process_combo_event()` is only a supported API for QMK's combo feature.
-See [official documentation](https://docs.qmk.fm/features/combo#examples)
+This page describes behavior that is known, intentional for now, or still on the development backlog. For setup failures, see [Debugging](040_debugging.md).
 
-Simple `COMBO()` are not supported yet
+## Combo support is partial
 
+SM_TD supports combo interactions only when the resolved tap can travel through the regular QMK processing pipeline. Custom or derived tap keycodes can use the direct-output fallback, which does not provide a complete synthetic combo record.
 
-## Twice quantum key processing before users code
+QMK's supported action-combo API is `COMBO_ACTION` with `process_combo_event()`. Simple `COMBO()` behavior is not guaranteed for every SM_TD output path. Better combo support is tracked upstream in [issue 41](https://github.com/stasmarkin/sm_td/issues/41).
 
-Then you press a key there are many layers involved in handling that press:
-- quantum's process_record()
-- keyboard's process_record_keyboard()
-- users process_record_user() (the one we write in keymap.c)
-- post user processing in keyboard layer
-- post keyboard processing in quantum
-- final decision to send a key press to OS
+## Pipeline taps replay part of QMK processing
 
-The problem is that sm_td suspends key handling execution in users layer and later emulates key pressing or releasing. The library uses quantum process_record() function to generate key presses and releases. So with single tap there will be such situation:
+SM_TD initially receives a physical press or release in `process_record_user()`. When the action resolves later, a native keymap tap can re-enter `process_record()` so Caps Word, Leader, Auto Shift, Key Overrides, and similar features can observe it.
 
-- user press a key
-- quantum layer runs process_record() for press
-- keyboard layer runs process_record_keyboard() for press
-- user layer runs process_record_user() for press
-- sm_td blocks further execution and nothing is sent to OS
+As a result, code before `process_record_user()` can observe the original physical event and the later emulated event. Code with side effects should check its keycode, event position, or SM_TD integration point carefully.
 
-- user release a key
-- quantum layer runs process_record() for release
-- keyboard layer runs process_record_keyboard() for release
-- user layer runs process_record_user() for release
-- sm_td interpret that as a tap, so it reruns process_record for press
-  - quantum layer runs process_record() for press
-  - keyboard layer runs process_record_keyboard() for press
-  - user layer runs process_record_user() for press
-  - sm_td passes exection since it recognized that as a tap
-  - post user processing in keyboard layer for press
-  - post keyboard processing in quantum for press
-  - send a key press to OS
-- sm_td passes release
-- post user processing in keyboard layer for release
-- post keyboard processing in quantum for release
-- send a key release to OS
+Pipeline replay is enabled by `SMTD_GLOBAL_PIPELINE_TAPS`. It can be disabled for a specific key with `SMTD_FEATURE_PIPELINE_TAPS` when duplicate processing causes an unwanted side effect.
 
-so as you see there is extra execution for process_record() and process_record_keyboard(). It's not a big deal if you don't use sm_td keys for anything else, I didn't notice any visible consequences of that behavior.
+## Derived keycodes have a reduced fallback path
 
-Since v0.5.6 this re-run through process_record() is actually a feature: it is how sm_td makes its taps visible to core QMK libraries (Caps Word, Auto Shift, Key Overrides, etc.), see `SMTD_GLOBAL_PIPELINE_TAPS` in [feature flags](https://github.com/stasmarkin/sm_td/blob/main/docs/080_customization_features.md). If the double processing causes side effects for a specific key, you can disable the pipeline for that key via `SMTD_FEATURE_PIPELINE_TAPS`. And if you find any bugs here, please create an issue on github
+When the tap keycode differs from the keycode at the pressed matrix position, SM_TD cannot safely replay that key as a normal matrix event. It sends the derived keycode directly and applies feature-specific compatibility where available.
 
+Current consequences:
 
-## Leader key support
+- Caps Word receives a compatibility pass.
+- Leader taps are added to the Leader sequence.
+- Combos, Repeat Key, and other features that depend on a complete matrix record may not see identical behavior.
 
-QMK's Leader feature (`process_leader`) runs in the quantum chain *after*
-`process_record_user`, so it only ever sees a tap that sm_td routes back through
-`process_record()`. For a key whose keymap position resolves to the tap keycode
-itself (the recommended `SMTD_MT(KC_A, MOD)` form), the pipeline taps above do
-exactly that, so leader sequences work out of the box.
+The production marker near `smtd_emulate_key()` tracks a possible combo-style record for row and column `(0, 0)` events.
 
-A tap on a custom/derived keycode (e.g. `SMTD_MT_ON_MKEY(CUSTOM_A, KC_A, MOD)`)
-cannot take the pipeline path, so sm_td used to send it directly to the host and
-the leader never saw it (issue #29). Such taps are now fed into the leader buffer
-the same way `process_leader` would, so leader sequences work for custom keycodes
-too.
+## Caps Word and held modifiers can differ from native QMK
 
-Caveat: only the *tap* is captured. Holding a custom mod-tap key during a leader
-sequence is not added to the buffer, since leader is a tap-sequence feature.
+A held SM_TD mod-tap registers its modifier directly. QMK Caps Word may therefore not observe the same tap-hold transition it observes for a native QMK mod-tap. In particular, a held non-shift modifier can remain invisible to Caps Word in some configurations.
+
+Use the Caps Word integration tests as the compatibility baseline and test custom `caps_word_press_user()` behavior on the target keymap.
+
+## Leader captures taps, not holds
+
+Native keymap taps reach Leader through the regular pipeline. Derived taps use SM_TD's Leader compatibility path. Holding a custom mod-tap during a Leader sequence is not added to the Leader buffer because Leader is a tap-sequence feature.
+
+## Development backlog markers
+
+The core currently contains four production follow-ups:
+
+- Cleanup of a state removed while iterating the active-state stack
+- Ordering or replacement of a repeated key already in `SMTD_STAGE_SEQUENCE`
+- Explicit coverage for a new press while another key is in `SMTD_STAGE_TOUCH_RELEASE`
+- Richer emulation records for keys without a real matrix position
+
+These are design or coverage tasks, not confirmed security vulnerabilities. Changes in these areas need focused unit tests and, when the QMK pipeline is involved, a native integration test.
+
+## Open upstream feature requests
+
+The upstream issue tracker currently includes requests for OSL, Layer Lock, tri-layer behavior, JSON-to-C support, easier configuration, examples, a documentation site, VIA/Vial improvements, and better combo support. Review the current issue and discussion before implementing one:
+
+<https://github.com/stasmarkin/sm_td/issues>

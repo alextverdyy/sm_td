@@ -22,7 +22,7 @@ loop — almost everything runs natively on your host machine.
 | Tool | Why | Notes |
 |------|-----|-------|
 | **Python 3.10+** | Unit-test layer (`ctypes` driver) | Must be on `PATH` |
-| **`clang`** | Compiles `sm_td.c` into a per-suite shared library for the Python tests | macOS ships it; on Linux install `clang` |
+| **C compiler** | Compiles `sm_td.c` into a per-suite shared library for the Python tests | Set `CC`, or install `clang`, `cc`, or `gcc` |
 | **`just`** | Task runner that wraps every build/test command | <https://github.com/casey/just> |
 | **`make` + a C++ toolchain** | QMK-native integration tests (googletest) | Only needed for the `qmk` test layer |
 | **`git`**, **`gh`** | Version control and GitHub operations | `gh` is used by the release flow |
@@ -37,7 +37,8 @@ maintainer's setup is documented.
 
 ```
 sm_td/                     Core C module (the shipped artifact)
-  sm_td.c / sm_td.h        Engine + public API and macros
+  sm_td.h                   Stable public configuration, hooks, and macro API
+  sm_td.c                   Private state machine and QMK integration
   introspection.h          Version block (kept in lockstep with sm_td.c/.h)
   qmk_module.json          QMK community-module metadata
 tests/
@@ -59,6 +60,11 @@ README.md                  Project intro, install options, version roadmap
 A change almost always touches `sm_td/` **and** at least one suite under
 `tests/`. Doc-only and test-only changes are valid too.
 
+`sm_td.h` is the supported facade. Keep engine state, timeout callbacks, debug
+formatting, and transition helpers private to `sm_td.c`. The engine intentionally
+stays in one translation unit so community-module builds and manual two-file
+installs require no extra source lists.
+
 ---
 
 ## 3. Build and run
@@ -67,8 +73,9 @@ There is no standalone binary to build — `SM_TD` is consumed by QMK. "Building
 in this repo means compiling the engine inside one of the test harnesses, which
 the test commands do for you.
 
-* **Unit layer** auto-compiles `sm_td.c` with `clang -shared -fPIC` into a
-  temporary `.dylib` (macOS) / `.so` (Linux) per suite. No manual step.
+* **Unit layer** auto-compiles `sm_td.c` with the compiler selected by `CC`,
+  then `clang`, `cc`, or `gcc`, into a `.dylib` (macOS) or `.so` (Linux).
+  No manual build step is required.
 * **Integration layer** compiles `sm_td.c` together with a real `qmk_firmware`
   checkout into a native googletest executable via `make`.
 
@@ -118,16 +125,16 @@ python3 tests/run_tests.py                          # same, directly
 python3 -m unittest tests.unit.caps_word_enable.test  # one suite
 ```
 
-This is the loop to run on **every** change — it is seconds-fast and is the only
-layer CI runs. Always run it before opening a PR.
+This is the loop to run on **every** change. It is fast, CI runs it on Linux and
+macOS, and the command returns a nonzero status for any failure or import error.
+The current baseline is fully green. Always run it before opening a PR.
 
-> **Known baseline failures:** 4 pre-existing FAILs
-> (`test_stirred_long_mod_smtd_press2_fixed` in `caps_word_enable` and
-> `complex_layout`) are a known prolong/defer assertion issue, unrelated to new
-> work. Don't treat those as a regression you caused — but don't add more.
+Set `SMTD_DEBUG=1` when you need the detailed engine trace. Normal test runs keep
+the trace disabled so failures remain readable.
 
-To add a unit suite, see `docs/090_test_template.md` (note: real suites live
-under `tests/unit/<feature>/` and import from `tests.unit.sm_td_assertions`).
+To add a unit suite, follow [`docs/090_test_template.md`](docs/090_test_template.md).
+It includes the current paths, a minimal layout, naming guidance, timing rules,
+and the return-value contract.
 
 ### Level 2 — QMK-native integration tests (real pipeline)
 

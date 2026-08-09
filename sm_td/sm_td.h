@@ -23,23 +23,14 @@
  */
 #pragma once
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #ifndef SMTD_UNIT_TEST
 #include QMK_KEYBOARD_H
-#include "deferred_exec.h"
 #endif
 
-#ifdef SMTD_GLOBAL_SIMULTANEOUS_PRESSES_DELAY_MS
-#include "timer.h"
-#endif
-
-#ifdef SMTD_DEBUG_ENABLED
-#include "print.h"
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#endif
-
-#ifdef SMTD_UNIT_TEST
+#if defined(SMTD_UNIT_TEST) && defined(SMTD_TEST_DEBUG) && !defined(SMTD_DEBUG_ENABLED)
 #define SMTD_DEBUG_ENABLED
 #endif
 
@@ -49,13 +40,6 @@
 
 #ifndef SMTD_GLOBAL_SIMULTANEOUS_PRESSES_DELAY_MS
 #define SMTD_GLOBAL_SIMULTANEOUS_PRESSES_DELAY_MS 0
-#endif
-
-#if SMTD_GLOBAL_SIMULTANEOUS_PRESSES_DELAY_MS > 0
-#define SMTD_SIMULTANEOUS_PRESSES_DELAY                                        \
-  wait_ms(SMTD_GLOBAL_SIMULTANEOUS_PRESSES_DELAY_MS);
-#else
-#define SMTD_SIMULTANEOUS_PRESSES_DELAY
 #endif
 
 #ifndef SMTD_GLOBAL_TAP_TERM
@@ -131,21 +115,9 @@
 #define SMTD_CHORDAL_HOLD 0
 #endif
 
-#include <stdint.h>
-
-
 /* ************************************* *
  *         BASE DEFINITIONS              *
  * ************************************* */
-
-typedef enum {
-    SMTD_STAGE_NONE,
-    SMTD_STAGE_TOUCH,
-    SMTD_STAGE_SEQUENCE,
-    SMTD_STAGE_HOLD,
-    SMTD_STAGE_TOUCH_RELEASE,
-    SMTD_STAGE_HOLD_RELEASE,
-} smtd_stage;
 
 typedef enum {
     SMTD_ACTION_TOUCH,
@@ -171,68 +143,6 @@ typedef enum {
     SMTD_FEATURE_PIPELINE_TAPS,
 } smtd_feature;
 
-
-typedef struct {
-    /** The position of a key that QMK thinks was pressed */
-    keypos_t pressed_keyposition;
-
-    /** The keycode of a key that QMK thinks was pressed */
-    uint16_t pressed_keycode;
-
-    /** The keycode that should be actually pressed (asked outside or determined by the tap action) */
-    uint16_t desired_keycode;
-
-    /** The length of the sequence of same key taps */
-    uint8_t tap_count;
-
-    /** The time when the key was pressed */
-    uint32_t pressed_time;
-
-    /** The time when the key was released */
-    uint32_t released_time;
-
-    /** The decision window for the touch-release stage, computed on entering it */
-    uint32_t release_term;
-
-    /** The timeout of current stage */
-    deferred_token timeout;
-
-    /** The current stage of the state */
-    smtd_stage stage;
-
-    /** The level of certainty of the state */
-    smtd_resolution resolution;
-
-    /** The action that already performed */
-    int8_t action_performed;
-
-    /** The action that can be performed */
-    int8_t action_required;
-
-    /** The index of the state in the active states array */
-    uint8_t idx;
-
-    /** Whether the last SMTD_REGISTER_16 was emulated through the full QMK pipeline */
-    bool emulated_register;
-} smtd_state;
-
-
-#define EMPTY_STATE {                               \
-        .pressed_keyposition = MAKE_KEYPOS(0, 0),   \
-        .pressed_keycode = 0,                       \
-        .desired_keycode = 0,                       \
-        .tap_count = 0,                             \
-        .pressed_time = 0,                          \
-        .released_time = 0,                         \
-        .release_term = 0,                          \
-        .timeout = INVALID_DEFERRED_TOKEN,          \
-        .stage = SMTD_STAGE_NONE,                   \
-        .resolution = SMTD_RESOLUTION_UNCERTAIN,    \
-        .action_performed = -1,                     \
-        .action_required = -1,                      \
-        .idx = 0,                                   \
-        .emulated_register = false,                 \
-}
 
 #ifndef SMTD_POOL_SIZE
 #define SMTD_POOL_SIZE 10
@@ -268,232 +178,27 @@ __attribute__((weak)) char smtd_chordal_handedness(keypos_t key);
 extern const char chordal_hold_layout[MATRIX_ROWS][MATRIX_COLS];
 #endif
 
-extern const uint16_t keymaps[][MATRIX_ROWS][MATRIX_COLS];
-
-
 /* ************************************* *
- *           INTERNAL FUNCTIONS          *
+ *         CUSTOMIZATION HELPERS         *
  * ************************************* */
 
-bool smtd_process_desired(uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
-
-void smtd_apply_to_stack(uint8_t starting_idx, uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
-
-void smtd_create_state(uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
-
-void smtd_apply_event(bool is_state_key, smtd_state *state, uint16_t pressed_keycode, keyrecord_t *record);
-
-void smtd_apply_stage(smtd_state *state, smtd_stage next_stage);
-
-void smtd_handle_action(smtd_state *state, smtd_action action);
-
-void smtd_execute_action(smtd_state *state, smtd_action action);
-
-void smtd_emulate_key(keypos_t *keypos, bool press);
-
-smtd_resolution smtd_worst_resolution_before(smtd_state *state);
-
-uint16_t smtd_current_keycode(keypos_t *key);
-
+/* Default implementations for custom timeout and feature hooks. */
 uint32_t get_smtd_timeout_default(smtd_timeout timeout);
-
-uint32_t get_smtd_timeout_or_default(smtd_state *state, smtd_timeout timeout);
-
 bool smtd_feature_enabled_default(uint16_t keycode, smtd_feature feature);
 
-bool smtd_feature_enabled_or_default(smtd_state *state, smtd_feature feature);
+/* Output helpers used by the customization macros below. */
+void smtd_tap_code16(bool use_cl, uint16_t key);
+void smtd_register_code16(bool use_cl, uint16_t key);
+void smtd_unregister_code16(bool use_cl, uint16_t key);
 
-/* ************************************* *
- *           DEBUG CONFIGURATION         *
- * ************************************* */
-
-#ifndef SMTD_DEBUG_ENABLED
-
-#define SMTD_DEBUG(...)
-#define SMTD_DEBUG_INPUT(...)
-#define SMTD_DEBUG_OFFSET_INC
-#define SMTD_DEBUG_OFFSET_DEC
-#define SMTD_DEBUG_FULL(...)
-#define SMTD_DEBUG_JSON(...)
-
-#else
-
-uint32_t last_key_timer = 0;
-
-#ifndef SMTD_PRINT
-#define SMTD_PRINT(...) printf(__VA_ARGS__);
+#ifdef SMTD_DEBUG_ENABLED
+/* Optional readable keycode names for debug output. */
+__attribute__((weak)) char *smtd_keycode_to_str_user(uint16_t keycode);
 #endif
-
-#ifndef SMTD_SNPRINT
-#define SMTD_SNPRINT(bffr, bsize, ...) snprintf(bffr, bsize, __VA_ARGS__);
-#endif
-
-#ifndef SMTD_DEBUG_PRINT_OFFSETS
-#define SMTD_DEBUG_PRINT_OFFSETS                                               \
-  for (uint8_t __i__ = 0; __i__ < smtd_debug_offset; __i__++) {                \
-    SMTD_PRINT("  ");                                                          \
-  }
-#endif
-
-#ifndef SMTD_DEBUG_OFFSET_INC
-#define SMTD_DEBUG_OFFSET_INC smtd_debug_offset++;
-#endif
-
-#ifndef SMTD_DEBUG_OFFSET_DEC
-#define SMTD_DEBUG_OFFSET_DEC smtd_debug_offset--;
-#endif
-
-#ifndef SMTD_DEBUG
-#define SMTD_DEBUG(...)                                                        \
-  do {                                                                         \
-    SMTD_PRINT("[%4d] ", __LINE__);                                            \
-    SMTD_DEBUG_PRINT_OFFSETS;                                                  \
-    SMTD_PRINT(__VA_ARGS__);                                                   \
-    SMTD_PRINT("\n");                                                          \
-  } while (0);
-#endif
-
-#ifndef SMTD_DEBUG_INPUT
-#define SMTD_DEBUG_INPUT(...)                                                  \
-  SMTD_DEBUG("%s", "");                                                        \
-  SMTD_DEBUG(">> +%lums", timer_elapsed32(last_key_timer));                    \
-  SMTD_DEBUG(__VA_ARGS__);                                                     \
-  last_key_timer = timer_read32();
-#endif
-
-#ifndef SMTD_SNDEBUG
-#define SMTD_SNDEBUG(bffr, bsize, ...) SMTD_SNPRINT(bffr, bsize, __VA_ARGS__);
-#endif
-
-#ifndef SMTD_DEBUG_FULL
-#define SMTD_DEBUG_FULL()                                                      \
-  SMTD_DEBUG("## active_statses %d", smtd_active_states_size);                 \
-  if (smtd_active_states_size == 0) {                                          \
-    SMTD_DEBUG("## %s", "");                                                   \
-    SMTD_DEBUG("## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## "  \
-               "## ## ## ## ## ## ## ## ## ## ## ## ##\n");                    \
-  };                                                                           \
-  for (int asdf = 0; asdf < smtd_active_states_size; asdf++) {                 \
-    SMTD_DEBUG("## %s", smtd_state_to_str(smtd_active_states[asdf]));          \
-  }
-#endif
-
-#ifndef SMTD_DEBUG_JSON
-#define SMTD_DEBUG_JSON(timestamp, state_id, from_key, to_key, status, action, \
-exec_status, result, event_type, duration_ms)          \
-std::cout << "{\n"                                                           \
-<< "  \"timestamp\": " << timestamp << ",\n"                       \
-<< "  \"state\": {\n"                                              \
-<< "    \"id\": " << state_id << ",\n"                             \
-<< "    \"from\": \"" << from_key << "\",\n"                       \
-<< "    \"to\": \"" << to_key << "\",\n"                           \
-<< "    \"status\": \"" << status << "\",\n"                       \
-<< "    \"action\": \"" << action << "\"\n"                        \
-<< "  },\n"                                                        \
-<< "  \"event\": {\n"                                              \
-<< "    \"type\": \"" << event_type << "\",\n"                     \
-<< "    \"duration_ms\": " << duration_ms << "\n"                  \
-<< "  },\n"                                                        \
-<< "  \"additional_info\": {\n"                                    \
-<< "    \"exec_status\": \"" << exec_status << "\",\n"             \
-<< "    \"result\": " << result << "\n"                            \
-<< "  }\n"                                                         \
-<< "}\n";
-#endif
-
-static uint8_t smtd_debug_offset = 0;
-
-char *smtd_stage_to_str(smtd_stage stage);
-
-char *smtd_action_to_str(smtd_action action);
-
-char *smtd_resolution_to_str(smtd_resolution resolution);
-
-__attribute__((weak)) char* smtd_keycode_to_str_user(uint16_t keycode);
-
-char* smtd_keycode_to_str_uncertain(uint16_t keycode, bool uncertain);
-
-char* smtd_keycode_to_str(uint16_t keycode);
-
-char* smtd_state_to_str(smtd_state *state);
-
-char* smtd_state_to_str2(smtd_state *state);
-
-char* smtd_record_to_str(keyrecord_t *record);
-
-#endif //SMTD_DEBUG_ENABLED
-
-
-/* ************************************* *
- *             TIMEOUTS                  *
- * ************************************* */
-
-uint32_t timeout_reset_seq(uint32_t trigger_time, void *cb_arg);
-
-uint32_t timeout_touch(uint32_t trigger_time, void *cb_arg);
-
-uint32_t timeout_sequence(uint32_t trigger_time, void *cb_arg);
-
-uint32_t timeout_touch_release(uint32_t trigger_time, void *cb_arg);
-
-uint32_t timeout_hold_release(uint32_t trigger_time, void *cb_arg);
-
-
-/* ************************************* *
- *             STATE PROCESSING          *
- * ************************************* */
-
-bool process_smtd(uint16_t pressed_keycode, keyrecord_t *record);
-
-bool smtd_process_desired(uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
-
-void
-smtd_apply_to_stack(uint8_t starting_idx, uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
-
-void smtd_create_state(uint16_t pressed_keycode, keyrecord_t *record, uint16_t desired_keycode);
-
-bool is_following_key(smtd_state *state, uint16_t pressed_keycode, keyrecord_t *record);
-
-void smtd_apply_event(bool is_state_key, smtd_state *state, uint16_t pressed_keycode, keyrecord_t *record);
-
-void reset_state(smtd_state *state);
-
-void smtd_apply_stage(smtd_state *state, smtd_stage next_stage);
-
-void smtd_handle_action(smtd_state *state, smtd_action action);
-
-void smtd_execute_action(smtd_state *state, smtd_action action);
-
-/* ************************************* *
- *      UTILITY FUNCTIONS                *
- * ************************************* */
-
-void smtd_emulate_key(keypos_t *keypos, bool press);
-
-smtd_resolution smtd_worst_resolution_before(smtd_state *state);
-
-uint32_t get_smtd_timeout_or_default(smtd_state *state, smtd_timeout timeout);
-
-uint32_t get_smtd_timeout_default(smtd_timeout timeout);
-
-uint32_t smtd_compute_release_term(smtd_state *state);
-
-uint16_t smtd_current_keycode(keypos_t *key);
-
-bool smtd_feature_enabled_or_default(smtd_state *state, smtd_feature feature);
-
-bool smtd_feature_enabled_default(uint16_t keycode, smtd_feature feature);
-
 
 /* ************************************* *
  *         CUSTOMIZATION MACROS          *
  * ************************************* */
-
-void smtd_tap_code16(bool use_cl, uint16_t key);
-
-void smtd_register_code16(bool use_cl, uint16_t key);
-
-void smtd_unregister_code16(bool use_cl, uint16_t key);
 
 #define SMTD_TAP_16(use_cl, key) smtd_tap_code16(use_cl, key)
 #define SMTD_REGISTER_16(use_cl, key) smtd_register_code16(use_cl, key)
@@ -502,20 +207,11 @@ void smtd_unregister_code16(bool use_cl, uint16_t key);
 #ifndef NOTHING
 #define NOTHING
 #endif
-#ifndef OVERLOAD6
-#define OVERLOAD6(_1, _2, _3, _4, _5, _6, NAME, ...) NAME
-#endif
 #ifndef OVERLOAD5
 #define OVERLOAD5(_1, _2, _3, _4, _5, NAME, ...) NAME
 #endif
 #ifndef OVERLOAD4
 #define OVERLOAD4(_1, _2, _3, _4, NAME, ...) NAME
-#endif
-#ifndef OVERLOAD3
-#define OVERLOAD3(_1, _2, _3, NAME, ...) NAME
-#endif
-#ifndef OVERLOAD2
-#define OVERLOAD2(_1, _2, NAME, ...) NAME
 #endif
 #ifndef EXEC
 #define EXEC(code)                                                             \

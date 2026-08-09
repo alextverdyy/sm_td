@@ -87,6 +87,7 @@ static history_t record_history[MAX_RECORD_HISTORY];
 static uint8_t record_count = 0;
 static deferred_exec_info_t deferred_execs[MAX_DEFERRED_EXECS] = {0};
 static uint8_t deferred_exec_count = 0;
+static bool fail_next_deferred_exec = false;
 
 void TEST_print(const char* format, ...);
 void TEST_snprintf(char* buffer, size_t bsize, const char* format, ...);
@@ -304,6 +305,11 @@ bool process_record(keyrecord_t *record) {
 }
 
 deferred_token defer_exec(uint32_t delay_ms, deferred_exec_callback callback, void *cb_arg) {
+    if (fail_next_deferred_exec) {
+        fail_next_deferred_exec = false;
+        return INVALID_DEFERRED_TOKEN;
+    }
+
     deferred_exec_count++;
     deferred_execs[deferred_exec_count-1].delay_ms = delay_ms;
     deferred_execs[deferred_exec_count-1].deadline_ms = mock_time_ms + delay_ms;
@@ -321,10 +327,12 @@ void cancel_deferred_exec(deferred_token token) {
 
 
 void TEST_print(const char* format, ...) {
+#ifdef SMTD_TEST_DEBUG
     va_list args;
     va_start(args, format);
     vprintf(format, args);
     va_end(args);
+#endif
 }
 
 void TEST_snprintf(char* buffer, size_t bsize, const char* format, ...) {
@@ -379,6 +387,10 @@ void TEST_advance_time(uint32_t ms) {
     mock_time_ms = target;
 }
 
+void TEST_fail_next_deferred_exec(void) {
+    fail_next_deferred_exec = true;
+}
+
 void TEST_reset() {
     mock_time_ms = 0;
     layer_state = 0;
@@ -387,6 +399,7 @@ void TEST_reset() {
     caps_word_active = false;
     record_count = 0;
     deferred_exec_count = 0;
+    fail_next_deferred_exec = false;
     smtd_executing_state = NULL;
     for (uint8_t i = 0; i < MAX_RECORD_HISTORY; i++) {
         record_history[i] = (history_t){0};
